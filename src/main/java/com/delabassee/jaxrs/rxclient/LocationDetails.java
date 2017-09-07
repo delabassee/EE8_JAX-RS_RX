@@ -37,10 +37,10 @@
  * only if the new code is made subject to such option by the copyright
  * holder.
  */
-
 package com.delabassee.jaxrs.rxclient;
 
 import java.util.Optional;
+import javax.json.JsonObject;
 
 /**
  *
@@ -51,11 +51,12 @@ public class LocationDetails {
     private String city;
     private String country;
 
-    public Optional<String> get() {        
-        if (city != null && country != null)
-            return Optional.of(city + " (" + country + ")");            
-        else 
+    public Optional<String> get() {
+        if (city != null && country != null) {
+            return Optional.of(city + " (" + country + ")");
+        } else {
             return Optional.empty();
+        }
     }
 
     public String getCity() {
@@ -69,11 +70,15 @@ public class LocationDetails {
     public String getCountry() {
         return country;
     }
-    
+
     public void setCountry(final String country) {
         this.country = country.replace("\"", "");
     }
-    
-    
-}
 
+    public LocationDetails updateWithLocation(JsonObject location) {
+        setCity(location.getValue("/data/city_name").toString());
+        setCountry(location.getValue("/data/country_name").toString());
+        return this;
+    }
+
+}

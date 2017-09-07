@@ -37,20 +37,18 @@
  * only if the new code is made subject to such option by the copyright
  * holder.
  */
-
 package com.delabassee.jaxrs.rxclient;
 
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.Produces;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -61,15 +59,13 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.MediaType;
 
 /**
- * Simple pipeline that invokes 2 services using JAX-RS 2.1 Rx invoker
- * No security, no error handling, ...
+ * Simple pipeline that invokes 2 services using JAX-RS 2.1 Rx invoker No
+ * security, no error handling, ...
+ *
  * @author davidd
  */
 @Path("/")
 public class Location {
-
-    @Context
-    private UriInfo context;
 
     public Location() {
     }
@@ -89,31 +85,21 @@ public class Location {
                 .rx()
                 .get(JsonObject.class);
 
-        CompletionStage<CompletionStage<JsonObject>> cfLoc = cfIp.thenApply((ip) -> {
-            String myIp = ip.getString("ip");
-            //LOGGER.info(" -> " + ip);
-            CompletionStage<JsonObject> cfGeoloc = client.target("https://ipvigilante.com")
-                    .path("json").path(myIp)
-                    .request()
-                    .rx()
-                    .get(JsonObject.class);
-            return cfGeoloc;
-        }).thenApply((cft) -> {
-            try {
-                JsonObject location = cft.toCompletableFuture().get();
-                locDetails.setCity(location.getValue("/data/city_name").toString());
-                locDetails.setCountry(location.getValue("/data/country_name").toString());
-                //LOGGER.info(" -> cft : " + locDetails.getCity() + " " + locDetails.getCountry());
-                async.resume(locDetails.get().orElse("???"));
-            } catch (InterruptedException | ExecutionException ex) {
-                //LOGGER.info(" -> whenComplete : " + ex);
-            }
-            return null;
-        }
-        );
+        Function<JsonObject, CompletionStage<JsonObject>> function = ip
+                -> client.target("https://ipvigilante.com")
+                        .path("json").path(ip.getString("ip"))
+                        .request()
+                        .rx()
+                        .get(JsonObject.class);
 
-    }
+        Consumer<JsonObject> consumer = location
+                -> async.resume(locDetails.updateWithLocation(location).get().orElse("???"));
+
+        cfIp.thenCompose(function)
+                .thenAccept(consumer);
         
+    }
+
     private Client getUnsecureClient() throws NoSuchAlgorithmException, KeyManagementException {
         TrustManager[] trustManager = new X509TrustManager[]{new X509TrustManager() {
             // This client will trust anybody regardless of its Cert!!          
@@ -137,5 +123,5 @@ public class Location {
                 .sslContext(sslContext).build();
         return client;
     }
-    
+
 }
